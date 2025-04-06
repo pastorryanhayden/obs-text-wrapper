@@ -18,65 +18,52 @@ export default class TextWrap extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		// =============================
-		// commands for command palette
-		// =============================
+		// Main command with modal input
 		this.addCommand({
 			id: 'wrap-text',
 			name: 'Enter new tags',
-
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				const selection = editor.getSelection();
-
-				const tagAndText = (tag: string, text: string) => {
-					editor.replaceSelection(`<${tag}>${text}</${tag}>`);
-				};
-
-				new TextWrapModal(this.app, selection, tagAndText).open()
+				new TextWrapModal(this.app, selection, (tag, text) => {
+					this.wrapText(editor, tag, text);
+				}).open();
 			},
 		});
 
+		// Quick Tag One command
 		this.addCommand({
 			id: 'quick-tag-one',
 			name: 'Quick Tag One',
-
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				const selection = editor.getSelection();
-				const tag = this.settings.quickTagOne;
-				editor.replaceSelection(`<${tag}>${selection}</${tag}>`)
+				this.wrapText(editor, this.settings.quickTagOne, selection);
 			},
 		});
 
-
+		// Quick Tag Two command
 		this.addCommand({
 			id: 'quick-tag-two',
 			name: 'Quick Tag Two',
-
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				const selection = editor.getSelection();
-				const tag = this.settings.quickTagTwo;
-				editor.replaceSelection(`<${tag}>${selection}</${tag}>`)
+				this.wrapText(editor, this.settings.quickTagTwo, selection);
 			},
 		});
 
-
+		// Quick Tag Three command
 		this.addCommand({
 			id: 'quick-tag-three',
 			name: 'Quick Tag Three',
-
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				const selection = editor.getSelection();
-				const tag = this.settings.quickTagThree;
-				editor.replaceSelection(`<${tag}>${selection}</${tag}>`)
+				this.wrapText(editor, this.settings.quickTagThree, selection);
 			},
 		});
 
 		this.addSettingTab(new SettingTab(this.app, this));
 	}
 
-	onunload() {
-
-	}
+	onunload() {}
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -85,12 +72,34 @@ export default class TextWrap extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
+
+	// Parse tag string into tag name and attributes
+	private parseTag(tagString: string): { tagName: string; attributes: string } {
+		const match = tagString.match(/^(\w+)(.*)/);
+		if (match) {
+			return {
+				tagName: match[1],
+				attributes: match[2].trim()
+			};
+		}
+		return {
+			tagName: tagString,
+			attributes: ''
+		};
+	}
+
+	// Wrap text with parsed tag, ensuring attributes are only in the opening tag
+	private wrapText(editor: Editor, tagString: string, text: string) {
+		const { tagName, attributes } = this.parseTag(tagString);
+		const openingTag = attributes ? `<${tagName} ${attributes}>` : `<${tagName}>`;
+		const closingTag = `</${tagName}>`;
+		editor.replaceSelection(`${openingTag}${text}${closingTag}`);
+	}
 }
 
 class TextWrapModal extends Modal {
 	modalTag: string;
 	modalText: string;
-
 	tagAndText: (modalTag: string, modalText: string) => void;
 
 	constructor(
@@ -106,7 +115,7 @@ class TextWrapModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 
-		contentEl.createEl("h3", { text: "Enter tags" })
+		contentEl.createEl("h3", { text: "Enter tags" });
 
 		new Setting(contentEl)
 			.setName("Press submit button to send tags")
@@ -116,18 +125,17 @@ class TextWrapModal extends Modal {
 				})
 			);
 
-
 		new Setting(contentEl)
 			.addButton((btn) =>
 				btn
 					.setButtonText("Submit")
 					.setCta()
 					.onClick(() => {
-						this.tagAndText(this.modalTag, this.modalText)
+						this.tagAndText(this.modalTag, this.modalText);
 						this.close();
-					}));
+					})
+			);
 	}
-
 
 	onClose() {
 		const { contentEl } = this;
@@ -149,7 +157,7 @@ class SettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		containerEl.createEl('h2', { text: 'Customize Quick Tags' });
-		containerEl.createEl('p', { text: 'Tags will be applied to selected text as: <tagName>selectedText</tagName>' });
+		containerEl.createEl('p', { text: 'Tags will be applied to selected text as: <tagName attributes>selectedText</tagName>' });
 
 		new Setting(containerEl)
 			.setName('Quick Tag One')
@@ -180,7 +188,5 @@ class SettingTab extends PluginSettingTab {
 					this.plugin.settings.quickTagThree = value;
 					await this.plugin.saveSettings();
 				}));
-
-
 	}
 }
